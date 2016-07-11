@@ -1,0 +1,19 @@
+version: '2'
+
+services:
+  app:
+    image: wasdev/sample-statictopology:app
+    ports:
+     - "9080"
+     - "9443"
+    labels:
+      liberty: ""
+  ihs:
+    image: wasdev/sample-ihscollective:ihs
+    ports:
+     - "80:80"
+    labels:
+      ihs: ""
+networks:
+  default:
+    driver: overlay

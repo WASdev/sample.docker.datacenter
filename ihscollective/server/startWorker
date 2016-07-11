@@ -1,0 +1,38 @@
+#!/bin/bash
+
+# Called on Docker stop
+function cleanup() {
+	echo "SIGTERM has been called"
+
+	# Remove the worker from the collective
+	/opt/ibm/wlp/bin/collective remove defaultServer --host=controller --port=9443 --user=admin --password=adminpwd
+
+	# Remove the generated collective create so that if its restarted it will rejoin
+	rm /config/configDropins/overrides/collective-create-include.xml
+	/opt/ibm/wlp/bin/server stop defaultServer
+	exit 1
+}
+
+# Auto accept certificates
+export JVM_ARGS=-Dcom.ibm.websphere.collective.utility.autoAcceptCertificates=true
+export HOSTFIX=${HOSTNAME}
+
+# Listen for Docker stop commands
+trap cleanup EXIT
+
+# Keep trying to join the collective (wait for a controller to finish setting up)
+timeout 600  bash -c -- 'while [ ! -f /config/configDropins/overrides/collective-create-include.xml ]; do /opt/ibm/wlp/bin/collective join defaultServer --host=controller1 --port=9443 --user=admin --password=adminpwd --keystorePassword=controllerKSpassword --createConfigFile=/config/configDropins/overrides/collective-create-include.xml --createConfigFile;done'
+
+# If it did manage to join the collective then start otherwise give up
+if [ -f /config/configDropins/overrides/collective-create-include.xml ]
+	then
+
+		# Run the java process in the background to allow for clean up
+		"$@" &
+
+		# While true keep sleeping until Docker stop is called
+		while :
+		do
+				sleep 1
+		done
+fi

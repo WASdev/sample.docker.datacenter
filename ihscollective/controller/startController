@@ -1,0 +1,48 @@
+#!/bin/bash
+
+# Auto accept any certificates
+export JVM_ARGS=-Dcom.ibm.websphere.collective.utility.autoAcceptCertificates=true
+
+# If the controller isn't already part of a collective or a replica set (usually only true when restarted)
+if [ ! -f /config/configDropins/overrides/collective-create-include.xml ] && [ ! -f /config/configDropins/overrides/replica-create-include.xml ]
+    then
+
+        # If the controller is the first controller up
+        if [ $HOSTNAME == "controller1" ]
+            then
+
+                # Create the collective and set the quick start security credentials
+                /opt/ibm/wlp/bin/collective create defaultServer --keystorePassword=controllerKSpassword --createConfigFile=/config/configDropins/overrides/collective-create-include.xml --hostname=$HOSTNAME
+                sed -i -e 's/<quickStartSecurity userName="" userPassword=""/<quickStartSecurity userName="admin" userPassword="adminpwd"/g' /config/configDropins/overrides/collective-create-include.xml
+
+                # Start the server and configure the dynamic routing
+                /opt/ibm/wlp/bin/server start defaultServer
+                /opt/ibm/wlp/bin/dynamicRouting setup --port=9443 --host=$HOSTNAME --user=admin --password=adminpwd --keystorePassword=controllerKSpassword --pluginInstallRoot=/opt/IBM/WebSphere/Plugins/ --webServerNames=webserver1
+
+                # Stop the server so the java command can be the main process
+                /opt/ibm/wlp/bin/server stop defaultServer
+
+            else
+
+                # Keep trying to replicate (wait for controller1 to finish setting up)
+                timeout 600 bash -c -- "until /opt/ibm/wlp/bin/collective replicate defaultServer --host=controller1 --hostName=$HOSTNAME --port=9443 --user=admin --password=adminpwd --keystorePassword=controllerKSpassword --createConfigFile=/config/configDropins/overrides/replica-create-include.xml; do sleep 10; done"
+                if [ $? -eq 0 ]
+                    then
+
+                        # Set up the quick start security and collective root keys
+                        sed -i -e 's/<quickStartSecurity userName="" userPassword=""/<quickStartSecurity userName="admin" userPassword="adminpwd"/g' /config/configDropins/overrides/replica-create-include.xml
+                        sed -i -e 's/<keyStore id="collectiveRootKeys" password=""/<keyStore id="collectiveRootKeys" password="{xor}PDAxKy0wMzM6LRQMLz4sLCgwLTs="/g' /config/configDropins/overrides/replica-create-include.xml
+
+                        # Start the server, add itself to the replice set and generate a plugin-cfg of the collective for IHS to use
+                        /opt/ibm/wlp/bin/server start defaultServer
+                        /opt/ibm/wlp/bin/collective addReplica $HOSTNAME:10010 --host=controller1 --port=9443 --user=admin --password=adminpwd
+                        /opt/ibm/wlp/bin/dynamicRouting genPluginCfg --port=9443 --host=$HOSTNAME --user=admin --password=adminpwd --pluginInstallRoot=/opt/IBM/WebSphere/Plugins/ --webServerNames=webserver1
+
+                        # Stop the server so the java command can be the main process
+                        /opt/ibm/wlp/bin/server stop defaultServer
+                fi
+        fi
+fi
+
+# Run the server as the main process
+exec "$@"

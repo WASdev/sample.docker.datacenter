@@ -1,0 +1,14 @@
+version: '2'
+
+services:
+  app:
+    networks:
+      - ihscollective
+    image: wasdev/sample-ihscollective:ferret
+    ports:
+     - "9080"
+     - "9443"
+networks:
+  ihscollective:
+    external:
+      name: ihscollective
