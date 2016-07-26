@@ -15,7 +15,7 @@
 #                                                                          #
 ############################################################################
 
-FROM ibmcom/ibm-http-server
+FROM ibmcom/ibm-http-server:8.5.5.9
 
 COPY responsefile.txt /opt/IBM/WebSphere/Toolbox/WCT/
 
