@@ -9,8 +9,8 @@ docker rm -f controller3
 docker rm -f ihs1
 docker rm -f ihs2
 docker-compose down
-rm -f plugin-cfg.xml
-rm -f plugin-key.jks
+mv plugin-cfg.xml plugin-cfg.xml.backup
+mv plugin-key.jks plugin-key.jks.backup
 
 
 # Get project name
